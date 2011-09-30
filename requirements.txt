@@ -1,0 +1,5 @@
+Twisted==11.0.0
+lxml==2.3.1
+-e git+https://github.com/fiorix/mongo-async-python-driver.git@99b5d4fc07c098d81bf0d730cb1c9a19eaedc411#egg=txmongo-dev
+wsgiref==0.1.2
+zope.interface==3.8.0
