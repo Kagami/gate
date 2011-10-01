@@ -71,20 +71,6 @@ class UserSubscriptions(db.MongoObject):
             fields=[])
         defer.returnValue(bool(res))
 
-    @defer.inlineCallbacks
-    def get_url_by_number(self, number):
-        if number < 1:
-            defer.returnValue(None)
-        elif number > db.MAX_DB_INT:
-            defer.returnValue(None)
-
-        res = yield self._db.find(
-            {"jid": self._jid},
-            skip=number-1, limit=1,
-            fields=["url"])
-        if res:
-            defer.returnValue(res[0]["url"])
-
     def subscribe(self, url):
         return self._db.insert(
             {"jid": self._jid, "url": url})
@@ -129,10 +115,7 @@ class Subscription(db.MongoObject):
         self._url = url
 
     @classmethod
-    def save(cls, sub):
-        """Create subscription if it doesn't exist
-        (url is unique index).
-        """
+    def create(cls, sub):
         return cls._db.insert(sub)
 
     def remove(self):
@@ -181,6 +164,14 @@ class Subscription(db.MongoObject):
             {"jid": jid},
             fields=[])
         defer.returnValue(bool(res))
+
+    @defer.inlineCallbacks
+    def get_jid(self):
+        res = yield self._db.find_one(
+            {"url": self._url},
+            fields=["jid"])
+        if res:
+            defer.returnValue(res["jid"])
 
     @classmethod
     @defer.inlineCallbacks

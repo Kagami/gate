@@ -14,7 +14,8 @@ class Subscriptions(Plugin):
     def get_handlers(self):
         return super(Subscriptions, self).get_handlers() + (
             (r"[Ss] +(\S+)", self.subscribe),
-            (r"[Uu]", self.unsubscribe),
+            (r"[Uu](?: +(\S+))?", self.unsubscribe),
+            (r"[Ll]", self.list_subscriptions),
         )
 
     def url_match(self, url):
@@ -55,7 +56,7 @@ class Subscriptions(Plugin):
                 username = parser.get_subscription_username(sub)
                 sub["jid"] = username + "@" + config.component_jid
                 yield user_subs.subscribe(sub["url"])
-                yield Subscription.save(sub)
+                yield Subscription.create(sub)
                 self._xmpp.send_presence(
                     to=user_jid, from_=sub["jid"],
                     type_="subscribe")
@@ -64,12 +65,16 @@ class Subscriptions(Plugin):
                     body=u"Subscribed.")
 
     @defer.inlineCallbacks
-    def unsubscribe(self, user_jid, our_jid):
-        """U
-        Unsubscribe from current url.
+    def unsubscribe(self, user_jid, our_jid, url):
+        """U [url]
+        Unsubscribe from current or given url.
         """
         user_subs = UserSubscriptions(user_jid)
-        url = yield Subscription.get_url_by_jid(our_jid)
+        if not url:
+            url = yield Subscription.get_url_by_jid(our_jid)
+            sub_jid = our_jid
+        else:
+            sub_jid = yield Subscription(url).get_jid()
         if url:
             is_subscribed = yield user_subs.is_subscribed(url)
         if url and is_subscribed:
@@ -79,7 +84,20 @@ class Subscriptions(Plugin):
                 to=user_jid, from_=get_full_jid(our_jid),
                 body="Unsubscribed.")
             self._xmpp.send_presence(
-                to=user_jid, from_=our_jid,
+                to=user_jid, from_=sub_jid,
+                type_="unsubscribe")
+            self._xmpp.send_presence(
+                to=user_jid, from_=sub_jid,
                 type_="unsubscribed")
         else:
             defer.returnValue(u"You haven't subscribed to this url.")
+
+    @defer.inlineCallbacks
+    def list_subscriptions(self, user_jid, our_jid):
+        """L
+        Show numbered subscriptions list.
+        """
+        subscriptions = yield UserSubscriptions(user_jid).get_list()
+        lines = [u"Your subscriptions:"]
+        lines.extend([sub["url"] for sub in subscriptions])
+        defer.returnValue(u"\n".join(lines))

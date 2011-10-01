@@ -10,9 +10,6 @@ from plugins import command_handler
 
 class XMPPComponent(component.Service):
 
-    def __init__(self):
-        self.blacklist = []
-
     def _log_data_in(self, buf):
         log.msg("RECV: %r" % buf)
 
@@ -35,13 +32,6 @@ class XMPPComponent(component.Service):
         if jid == config.main_jid:
             return True
         return Subscription.is_jid_exists(jid)
-
-    def is_blacklisted(self, server):
-        pos = server.find("@")
-        if pos != -1:
-            server = server[pos+1:]
-        if server in self.blacklist:
-            return True
 
     @defer.inlineCallbacks
     def _on_presence(self, prs):
@@ -93,11 +83,7 @@ class XMPPComponent(component.Service):
             return
 
         reply_msg = self.message(to=msg["from"], from_=our_full_jid)
-        if self.is_blacklisted(user_jid):
-            reply_msg.body.addContent(u"Sorry, your server in blacklist "
-                                       "because of spam.")
-            self.send(reply_msg)
-        elif is_alive:
+        if is_alive:
             d = command_handler(user_jid, our_jid, text)
             d.addCallbacks(self._send_reply, self._send_error_report,
                            callbackArgs=[reply_msg],

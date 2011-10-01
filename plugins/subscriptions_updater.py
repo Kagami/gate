@@ -116,15 +116,19 @@ class SubscriptionsUpdater(Plugin):
     def dead_url(self, sub):
         url = sub["url"]
         self.debug("URL DEAD: %s" % url)
+        from_ = get_full_jid(sub["jid"])
         users = yield UserSubscriptions.find(url)
         yield UserSubscriptions.unsubscribe_all(url)
         yield Subscription(url).remove()
         for user in users:
             self._xmpp.send_message(
-                to=user["jid"], from_=get_full_jid(sub["jid"]),
+                to=user["jid"], from_=from_,
                 body=u"Url dead.")
             self._xmpp.send_presence(
-                to=user["jid"], from_=get_full_jid(sub["jid"]),
+                to=user["jid"], from_=sub["jid"],
+                type_="unsubscribe")
+            self._xmpp.send_presence(
+                to=user["jid"], from_=sub["jid"],
                 type_="unsubscribed")
 
     @defer.inlineCallbacks
@@ -142,11 +146,12 @@ class SubscriptionsUpdater(Plugin):
             return
         if "updates" in parsed:
             # Send updates to users
+            from_ = get_full_jid(sub["jid"])
             users = yield UserSubscriptions.find(sub["url"])
             for user in users:
                 for text, xhtml in parsed["updates"]:
                     self._xmpp.send_message(
-                        to=user["jid"], from_=get_full_jid(sub["jid"]),
+                        to=user["jid"], from_=from_,
                         body=text, body_xhtml=xhtml)
         # Update subscription info
         subscription = Subscription(sub["url"])
