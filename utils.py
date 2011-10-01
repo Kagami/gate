@@ -59,3 +59,14 @@ class PipeProtocol(object):
         if type(packet) is unicode:
             packet = packet.encode("utf-8")
         return str(len(packet)) + "|" + packet
+
+
+def get_bare_jid(jid):
+    pos = jid.find("/")
+    if pos != -1:
+       jid = jid[:pos]
+    return jid
+
+
+def get_full_jid(jid):
+    return jid + "/" + config.resource

@@ -3,6 +3,7 @@ from twisted.internet import defer
 from twisted.words.xish import domish
 from twisted.words.protocols.jabber import component
 from db_objects import *
+from utils import get_bare_jid, get_full_jid
 import config
 from plugins import command_handler
 
@@ -27,13 +28,6 @@ class XMPPComponent(component.Service):
         xmlstream.addObserver("/presence", self._on_presence)
         xmlstream.addObserver("/message[@type='chat']", self._on_message)
 
-    def get_bare_jid(self, jid):
-        """Returns bare jid."""
-        pos = jid.find("/")
-        if pos != -1:
-           jid = jid[:pos]
-        return jid
-
     def is_jid_alive(self, jid):
         """Check if jid is alive i.e. corresponding url still
         exists or it's main jid which always alive.
@@ -54,11 +48,11 @@ class XMPPComponent(component.Service):
         # TODO: Save subscriptions to the database and
         # send appropriate presences to users when go
         # online/offline (service restart).
-        user_jid = self.get_bare_jid(prs["from"])
+        user_jid = get_bare_jid(prs["from"])
         if config.only_admin and user_jid != config.admin_jid:
             return
-        our_jid = self.get_bare_jid(prs["to"])
-        our_full_jid = our_jid + "/" + config.resource
+        our_jid = get_bare_jid(prs["to"])
+        our_full_jid = get_full_jid(our_jid)
         type_ = prs.getAttribute("type")
         is_alive = yield self.is_jid_alive(our_jid)
         send_status = False
@@ -66,31 +60,30 @@ class XMPPComponent(component.Service):
         if type_ == "subscribe" and is_alive:
             # Approve subscribe if jid is alive
             self.send_presence(
-                to=prs["from"],
-                from_=our_jid,
+                to=user_jid, from_=our_jid,
                 type_="subscribed")
-            send_status = True
             if our_jid == config.main_jid:
-                self.send_message(
-                    to=prs["from"],
-                    from_=our_full_jid,
-                    body=(u"Oh hai. Type 'help' (without quotes) "
-                           "for help and basic info."))
+                self.send_presence(
+                    to=user_jid, from_=our_jid,
+                    type_="subscribe")
+                is_exists = yield UserSettings(user_jid).is_exists()
+                if not is_exists:
+                    self.send_message(
+                        to=prs["from"],
+                        from_=our_full_jid,
+                        body=(u"Oh hai. Type 'help' (without quotes) "
+                               "for help and basic info."))
+            send_status = True
         if type_ == "probe" or send_status:
-            # Send online status if jid is alive
-            # else offline (unavailable).
-            reply_prs = self.presence(to=prs["from"], from_=our_full_jid)
-            if not is_alive:
-                reply_prs["type"] = "unavailable"
-            self.send(reply_prs)
+            self.send_presence(to=prs["from"], from_=our_full_jid)
 
     @defer.inlineCallbacks
     def _on_message(self, msg):
-        user_jid = self.get_bare_jid(msg["from"])
+        user_jid = get_bare_jid(msg["from"])
         if config.only_admin and user_jid != config.admin_jid:
             return
-        our_jid = self.get_bare_jid(msg["to"])
-        our_full_jid = our_jid + "/" + config.resource
+        our_jid = get_bare_jid(msg["to"])
+        our_full_jid = get_full_jid(our_jid)
         is_alive = yield self.is_jid_alive(our_jid)
 
         if (msg.body and len(msg.body.children) > 0 and

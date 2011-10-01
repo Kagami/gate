@@ -16,6 +16,19 @@ class UserSettings(db.MongoObject):
         self._jid = jid
 
     @defer.inlineCallbacks
+    def is_exists(self):
+        """If user doesn't exist, set initial settings."""
+        time = datetime.datetime.utcfromtimestamp(0)
+        try:
+            res = yield self._db.insert(
+                {"jid": self._jid, "last_subscribe": time},
+                safe=True)
+        except txmongo._pymongo.errors.OperationFailure:
+            defer.returnValue(True)
+        else:
+            defer.returnValue(False)
+
+    @defer.inlineCallbacks
     def is_too_fast_subscribe(self):
         """Return False and update user's last
         subscribe time to now if last subscribe
@@ -72,11 +85,9 @@ class UserSubscriptions(db.MongoObject):
         if res:
             defer.returnValue(res[0]["url"])
 
-    def subscribe(self, url, description=""):
-        if description is None:
-            description = ""
+    def subscribe(self, url):
         return self._db.insert(
-            {"jid": self._jid, "url": url, "description": description})
+            {"jid": self._jid, "url": url})
 
     def unsubscribe(self, url):
         return self._db.remove(
@@ -86,13 +97,6 @@ class UserSubscriptions(db.MongoObject):
     def unsubscribe_all(cls, url):
         return cls._db.remove(
             {"url": url})
-
-    def update_description(self, url, description=""):
-        if description is None:
-            description = ""
-        return self._db.update(
-            {"jid": self._jid, "url": url},
-            {"$set": {"description": description}})
 
     def get_list(self):
         """Return user's subscriptions."""
@@ -177,6 +181,15 @@ class Subscription(db.MongoObject):
             {"jid": jid},
             fields=[])
         defer.returnValue(bool(res))
+
+    @classmethod
+    @defer.inlineCallbacks
+    def get_url_by_jid(cls, jid):
+        res = yield cls._db.find_one(
+            {"jid": jid},
+            fields=["url"])
+        if res:
+            defer.returnValue(res["url"])
 
 
 class Host(db.MongoObject):

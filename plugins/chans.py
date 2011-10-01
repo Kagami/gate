@@ -5,13 +5,9 @@ from parsers import parsers
 class Chans(Subscriptions):
     """Chans plugin."""
 
-    about = u"""Usage examples:
+    about = u"""Usage example:
         S http://example.com/b/res/1947391.html
-        S http://example.com/a/res/68380.html cool thread!
-        U http://example.com/a/res/68380.html
-        L
-        D 1 not so cool
-        U 1
+        U
         """
 
     def get_handlers(self):

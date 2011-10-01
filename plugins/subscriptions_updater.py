@@ -6,7 +6,7 @@ from db_objects import *
 from fetcher import NotFound, get_last_modified, get_page
 from plugins import Plugin
 from parsers import parsers
-from utils import require_admin, trim, PipeProtocol
+from utils import require_admin, trim, PipeProtocol, get_full_jid
 import config
 
 
@@ -114,19 +114,18 @@ class SubscriptionsUpdater(Plugin):
 
     @defer.inlineCallbacks
     def dead_url(self, sub):
-        self.debug("URL DEAD: %s" % sub["url"])
+        url = sub["url"]
+        self.debug("URL DEAD: %s" % url)
         users = yield UserSubscriptions.find(url)
         yield UserSubscriptions.unsubscribe_all(url)
         yield Subscription(url).remove()
-        url = sub["url"]
-        from_ = sub["jid"] + "/" + config.resource
         for user in users:
             self._xmpp.send_message(
-                to=user["jid"], from_=from_,
+                to=user["jid"], from_=get_full_jid(sub["jid"]),
                 body=u"Url dead.")
             self._xmpp.send_presence(
-                to=user["jid"], from_=from_,
-                type_="unavailable")
+                to=user["jid"], from_=get_full_jid(sub["jid"]),
+                type_="unsubscribed")
 
     @defer.inlineCallbacks
     def bad_url(self, sub, err):
@@ -143,12 +142,11 @@ class SubscriptionsUpdater(Plugin):
             return
         if "updates" in parsed:
             # Send updates to users
-            from_ = sub["jid"] + "/" + config.resource
             users = yield UserSubscriptions.find(sub["url"])
             for user in users:
                 for text, xhtml in parsed["updates"]:
                     self._xmpp.send_message(
-                        to=user["jid"], from_=from_,
+                        to=user["jid"], from_=get_full_jid(sub["jid"]),
                         body=text, body_xhtml=xhtml)
         # Update subscription info
         subscription = Subscription(sub["url"])
