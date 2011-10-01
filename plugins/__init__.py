@@ -27,8 +27,9 @@ def command_handler(user_jid, our_jid, text):
 class Plugin(object):
     """Base plugin class. Implements command handling."""
 
-    def __init__(self, show_help=False):
-        self.show_help = show_help
+    show_help = False
+
+    def __init__(self):
         self.name = self.__class__.__name__.lower()
         docs = [u"%s plugin help:" % self.name]
         # Compile handlers' regexs and create help
@@ -81,6 +82,15 @@ class PluginsService(service.Service):
         self._xmpp = xmpp_component
 
     def startService(self):
+        def do_class(matchobj):
+            return matchobj.group().replace("_", "").upper()
+
+        for plugin_name in config.plugins:
+            class_name = re.sub(r"^.|_.", do_class, plugin_name)
+            mod = __import__("plugins." + plugin_name)
+            mod = getattr(mod, plugin_name)
+            plugin = getattr(mod, class_name)()
+            _plugins.append(plugin)
         for plugin in _plugins:
             plugin.start(_plugins, self._xmpp)
 
@@ -88,20 +98,4 @@ class PluginsService(service.Service):
         for plugin in _plugins:
             plugin.stop()
 
-
-# Import and load plugins
-from plugins.help import Help
-from plugins.config_plugin import ConfigPlugin
-from plugins.blacklist import Blacklist
-from plugins.subscriptions_updater import SubscriptionsUpdater
-from plugins.dummy_subscribe import DummySubscribe
-from plugins.chans import Chans
-
-_plugins = (
-    Help(),
-    Blacklist(),
-    SubscriptionsUpdater(),
-    Chans(show_help=True),
-    DummySubscribe(),
-    ConfigPlugin(),  # Should be latest in list
-)
+_plugins = []

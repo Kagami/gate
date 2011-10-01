@@ -66,7 +66,7 @@ class Subscriptions(Plugin):
     @defer.inlineCallbacks
     def unsubscribe(self, user_jid, our_jid):
         """U
-        Unsubscribe from current subscription.
+        Unsubscribe from current url.
         """
         user_subs = UserSubscriptions(user_jid)
         url = yield Subscription.get_url_by_jid(our_jid)

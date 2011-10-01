@@ -5,6 +5,7 @@ from parsers import parsers
 class Chans(Subscriptions):
     """Chans plugin."""
 
+    show_help = True
     about = u"""Usage example:
         S http://example.com/b/res/1947391.html
         U
