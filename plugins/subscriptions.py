@@ -95,7 +95,7 @@ class Subscriptions(Plugin):
     @defer.inlineCallbacks
     def list_subscriptions(self, user_jid, our_jid):
         """L
-        Show numbered subscriptions list.
+        Show your subscriptions list.
         """
         subscriptions = yield UserSubscriptions(user_jid).get_list()
         lines = [u"Your subscriptions:"]

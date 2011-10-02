@@ -13,7 +13,7 @@ import config
 class SubscriptionsUpdater(Plugin):
 
     MAX_CONNECTIONS_COUNT = 50
-    UPDATE_TIMEOUT = 60 * 2
+    UPDATE_TIMEOUT = 60 * 5
 
     def start(self, plugins, xmpp):
         super(SubscriptionsUpdater, self).start(plugins, xmpp)
