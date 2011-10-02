@@ -1,6 +1,7 @@
 import re
 from twisted.application import service
 from twisted.internet import defer
+from parsing_protocol import ParsingProtocol
 from utils import _NotHandled, trim
 import config
 
@@ -29,23 +30,25 @@ class Plugin(object):
 
     show_help = False
 
-    def __init__(self):
+    def __init__(self, plugins, xmpp, worker):
         self.name = self.__class__.__name__.lower()
-        docs = [u"%s plugin help:" % self.name]
+        self._plugins = plugins
+        self._xmpp = xmpp
+        self._worker = worker
         # Compile handlers' regexs and create help
         self._handlers = []
+        docs = [u"%s plugin help:" % self.name]
         for regex, handler in self.get_handlers():
             regex = u"\A%s\Z" % regex
             self._handlers.append((re.compile(regex), handler))
             if handler.__doc__:
                 docs.append(trim(handler.__doc__))
-        if hasattr(self.__class__, "about"):
-            docs.append(trim(self.__class__.about))
+        if hasattr(self, "about"):
+            docs.append(trim(self.about))
         self._help_text = u"\n\n".join(docs)
 
-    def start(self, plugins, xmpp):
-        self._plugins = plugins
-        self._xmpp = xmpp
+    def start(self):
+        pass
 
     def stop(self):
         pass
@@ -80,22 +83,26 @@ class PluginsService(service.Service):
 
     def __init__(self, xmpp_component):
         self._xmpp = xmpp_component
+        self._worker = ParsingProtocol(xmpp_component)
 
     def startService(self):
         def do_class(matchobj):
             return matchobj.group().replace("_", "").upper()
 
+        self._worker.start()
         for plugin_name in config.plugins:
             class_name = re.sub(r"^.|_.", do_class, plugin_name)
             mod = __import__("plugins." + plugin_name)
             mod = getattr(mod, plugin_name)
-            plugin = getattr(mod, class_name)()
+            plugin = getattr(mod, class_name)(
+                _plugins, self._xmpp, self._worker)
             _plugins.append(plugin)
         for plugin in _plugins:
-            plugin.start(_plugins, self._xmpp)
+            plugin.start()
 
     def stopService(self):
         for plugin in _plugins:
             plugin.stop()
+        self._worker.stop()
 
 _plugins = []

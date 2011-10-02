@@ -152,6 +152,14 @@ class Subscription(db.MongoObject):
             {"url": self._url},
             {"$set": {"last_modified": last_modified}})
 
+    @defer.inlineCallbacks
+    def get_last(self):
+        res = yield self._db.find_one(
+            {"url": self._url},
+            fields=["last"])
+        if res:
+            defer.returnValue(res["last"])
+
     def set_last(self, last):
         return self._db.update(
             {"url": self._url},

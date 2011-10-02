@@ -1,7 +1,7 @@
 import datetime
 from twisted.internet import defer
 from db_objects import *
-from fetcher import get_last_modified
+from fetcher import get_page
 from plugins import Plugin
 from parsers import parsers
 from utils import _NotHandled, get_full_jid
@@ -30,8 +30,8 @@ class Subscriptions(Plugin):
         """S <url>
         Subscribe to url.
         """
-        user_subs = UserSubscriptions(user_jid)
-        is_subscribed = yield user_subs.is_subscribed(url)
+        is_subscribed = yield UserSubscriptions(
+            user_jid).is_subscribed(url)
         if is_subscribed:
             defer.returnValue(u"You've already subscribed to this url.")
         else:
@@ -43,26 +43,47 @@ class Subscriptions(Plugin):
             if is_too_fast:
                 defer.returnValue(u"Too many subscribe requests. "
                                    "Please, slow down.")
+            sub = sub.copy()
+            sub["url"] = url
+            parser = parsers[sub["parser"]]
+            username = parser.get_subscription_username(sub)
+            sub["jid"] = username + "@" + config.component_jid
+            last = yield Subscription(url).get_last()
+            self.process_last(user_jid, our_jid, sub, last)
+
+    @defer.inlineCallbacks
+    def process_last(self, user_jid, our_jid, sub, last):
+        if last is not None:
+            sub["last"] = last
+            yield UserSubscriptions(user_jid).subscribe(sub["url"])
+            yield Subscription.create(sub)
+            self._xmpp.send_presence(
+                to=user_jid, from_=sub["jid"],
+                type_="subscribe")
+            self._xmpp.send_message(
+                to=user_jid, from_=get_full_jid(sub["jid"]),
+                body=u"Subscribed.")
+        else:
+            # TODO: is_too_fast check?
             try:
-                yield get_last_modified(url)
+                page = yield get_page(sub["url"])
             except Exception:
-                defer.returnValue(
-                    u"Url check failed, subscription aborted. "
-                     "Seems like not existing url.")
-            else:
-                sub = sub.copy()
-                sub["url"] = url
-                parser = parsers[sub["parser"]]
-                username = parser.get_subscription_username(sub)
-                sub["jid"] = username + "@" + config.component_jid
-                yield user_subs.subscribe(sub["url"])
-                yield Subscription.create(sub)
-                self._xmpp.send_presence(
-                    to=user_jid, from_=sub["jid"],
-                    type_="subscribe")
                 self._xmpp.send_message(
-                    to=user_jid, from_=get_full_jid(sub["jid"]),
-                    body=u"Subscribed.")
+                    to=user_jid, from_=get_full_jid(our_jid),
+                    body=u"Url check failed, subscription aborted. "
+                          "Seems like not existing url.")
+            else:
+                self._worker.add_task(
+                    sub, page, self.process_parsed, user_jid, our_jid)
+
+    def process_parsed(self, sub, parsed, user_jid, our_jid):
+        if "last" in parsed and parsed["last"] is not None:
+            self.process_last(user_jid, our_jid, sub, parsed["last"])
+        else:
+            self._xmpp.send_message(
+                to=user_jid, from_=get_full_jid(our_jid),
+                body=u"Page parsing failed, subscription aborted. "
+                      "Seems like not existing url.")
 
     @defer.inlineCallbacks
     def unsubscribe(self, user_jid, our_jid, url):

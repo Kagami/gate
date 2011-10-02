@@ -5,9 +5,9 @@ from plugins import Plugin
 class Help(Plugin):
     """Implements help."""
 
-    def start(self, plugins, xmpp):
-        super(Help, self).start(plugins, xmpp)
-        plugins_str = u", ".join([p.name for p in plugins if p.show_help])
+    def start(self):
+        plugins_str = u", ".join(
+            [p.name for p in self._plugins if p.show_help])
         self._help_text = trim(u"""Help:
 
             Help [plugin]

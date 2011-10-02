@@ -1,11 +1,11 @@
 import traceback
-import cPickle
 from twisted.python import log
-from twisted.internet import task, defer, reactor, protocol, error
+from twisted.internet import task, defer, reactor
 from db_objects import *
 from fetcher import NotFound, get_last_modified, get_page
 from plugins import Plugin
 from parsers import parsers
+from parsing_protocol import ParsingProtocol
 from utils import require_admin, trim, PipeProtocol, get_full_jid
 import config
 
@@ -15,16 +15,15 @@ class SubscriptionsUpdater(Plugin):
     MAX_CONNECTIONS_COUNT = 50
     UPDATE_TIMEOUT = 60 * 5
 
-    def start(self, plugins, xmpp):
-        super(SubscriptionsUpdater, self).start(plugins, xmpp)
-        self._worker = ParsingProtocol(self._xmpp)
-        self._worker.start()
+    def start(self):
+        self._sub_worker = ParsingProtocol(self._xmpp)
+        self._sub_worker.start()
         self._conn_count = 0
         self._loop = task.LoopingCall(self.run)
         self._loop.start(self.UPDATE_TIMEOUT)
 
     def stop(self):
-        self._worker.stop()
+        self._sub_worker.stop()
 
     def get_handlers(self):
         return super(SubscriptionsUpdater, self).get_handlers() + (
@@ -106,7 +105,7 @@ class SubscriptionsUpdater(Plugin):
             err = traceback.format_exc()[:-1]
             self.bad_url(sub, err)
         else:
-            self._worker.add_task(
+            self._sub_worker.add_task(
                 sub, page, self.process_parsed,
                 last_modified)
         # We've done, decrement connections count
@@ -141,9 +140,6 @@ class SubscriptionsUpdater(Plugin):
 
     @defer.inlineCallbacks
     def process_parsed(self, sub, parsed, last_modified):
-        if "last" not in parsed:
-            # No changes
-            return
         if "updates" in parsed:
             # Send updates to users
             from_ = get_full_jid(sub["jid"])
@@ -155,48 +151,7 @@ class SubscriptionsUpdater(Plugin):
                         body=text, body_xhtml=xhtml)
         # Update subscription info
         subscription = Subscription(sub["url"])
-        yield subscription.set_last(parsed["last"])
+        if "last" in parsed:
+            yield subscription.set_last(parsed["last"])
         if last_modified:
             yield subscription.set_last_modified(last_modified)
-
-
-class ParsingProtocol(protocol.ProcessProtocol):
-
-    def __init__(self, xmpp):
-        self._xmpp = xmpp
-        self._proto = PipeProtocol()
-        self._callbacks = {}
-        self._id = 0
-
-    def start(self):
-        reactor.spawnProcess(self, "parsing_worker.py")
-
-    def stop(self):
-        try:
-            self.transport.signalProcess("KILL")
-        except error.ProcessExitedAlready:
-            pass
-
-    def outReceived(self, out):
-        packets = self._proto.decode(out)
-        for packet in packets:
-            parsed = cPickle.loads(packet)
-            (fn, task, args, kwargs) = self._callbacks[parsed["_id"]]
-            del self._callbacks[parsed["_id"]]
-            fn(task, parsed, *args, **kwargs)
-
-    def errReceived(self, err):
-        report = u"PARSING WORKER ERROR:\n\n%s" % err
-        log.msg(report)
-        self._xmpp.send_message(
-            to=config.error_report_jid, from_=config.main_full_jid,
-            body=report)
-
-    def add_task(self, task, data, fn, *args, **kwargs):
-        self._id += 1
-        self._callbacks[self._id] = (fn, task, args, kwargs)
-        task = task.copy()
-        task["_id"] = self._id
-        task["_data"] = data
-        encoded = self._proto.encode(cPickle.dumps(task, protocol=2))
-        self.transport.write(encoded)

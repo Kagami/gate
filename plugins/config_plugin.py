@@ -8,8 +8,7 @@ from plugins import Plugin
 class ConfigPlugin(Plugin):
     """Implements getting and setting plugins configs."""
 
-    def start(self, plugins, xmpp):
-        super(ConfigPlugin, self).start(plugins, xmpp)
+    def start(self):
         # Blockingly get config and set it. It's ok since
         # reactor has not started yet.
         config = self._blocking_get_config()
