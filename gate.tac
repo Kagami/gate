@@ -7,6 +7,7 @@ if dirname:
     sys.path.insert(0, ".")
 
 
+import re
 from twisted.application import service
 from twisted.words.protocols.jabber import component
 from xmpp_component import XMPPComponent
@@ -15,12 +16,16 @@ import config
 
 application = service.Application("gate")
 
-# Set rotateLength to 20M
-from twisted.scripts._twistd_unix import ServerOptions
-options = ServerOptions()
-options.parseOptions()
-logfilename = options.get("logfile")
-if logfilename and logfilename != "-":
+# Set rotateLength to 20M; use log filename from command line.
+# Really kludge but we can't use ServerOptions since
+# it will try to install the reactor 2 times.
+opts = " ".join(sys.argv)
+match = re.search(r" (?:(?:--logfile(?: |=))|(?:-l ?))([^ ]+)", opts)
+if match is None:
+    logfilename = "-"
+else:
+    logfilename = match.group(1)
+if logfilename != "-":
     from twisted.python.log import ILogObserver, FileLogObserver
     from twisted.python.logfile import LogFile
     logfile = LogFile.fromFullPath(logfilename, rotateLength=20000000)
