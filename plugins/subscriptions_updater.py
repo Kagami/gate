@@ -13,7 +13,7 @@ import config
 class SubscriptionsUpdater(Plugin):
 
     MAX_CONNECTIONS_COUNT = 50
-    UPDATE_TIMEOUT = 60 * 5
+    UPDATE_TIMEOUT = 60 * 2
 
     def start(self):
         self._sub_worker = ParsingProtocol(self._xmpp)
