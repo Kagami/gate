@@ -15,6 +15,9 @@ class Wakaba(Parser):
         regex = r"\Ahttp://%s/[A-Za-z\d]{1,10}/res/\d{1,10}\.html\Z" % host
         return re.compile(regex)
 
+    def get_board_url(self, host, board):
+        return "http://%s/%s/" % (host, board)
+
     def get_subscription_username(self, sub):
         if sub["type"] == "thread":
             spl = sub["url"].split("/")

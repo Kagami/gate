@@ -20,7 +20,7 @@ class UserSettings(db.MongoObject):
         """If user doesn't exist, set initial settings."""
         time = datetime.datetime.utcfromtimestamp(0)
         try:
-            res = yield self._db.insert(
+            yield self._db.insert(
                 {"jid": self._jid, "last_subscribe": time},
                 safe=True)
         except txmongo._pymongo.errors.OperationFailure:
