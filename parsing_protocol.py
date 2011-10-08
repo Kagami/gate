@@ -1,7 +1,6 @@
 import cPickle
 from twisted.python import log
-from twisted.internet import protocol, reactor, error
-from utils import PipeProtocol
+from twisted.internet import defer, reactor, protocol, error
 import config
 
 
@@ -26,9 +25,8 @@ class ParsingProtocol(protocol.ProcessProtocol):
         packets = self._proto.decode(out)
         for packet in packets:
             parsed = cPickle.loads(packet)
-            (fn, task, args, kwargs) = self._callbacks[parsed["_id"]]
+            self._callbacks[parsed["_id"]].callback(parsed)
             del self._callbacks[parsed["_id"]]
-            fn(task, parsed, *args, **kwargs)
 
     def errReceived(self, err):
         report = u"PARSING WORKER ERROR:\n\n%s" % err
@@ -37,11 +35,49 @@ class ParsingProtocol(protocol.ProcessProtocol):
             to=config.error_report_jid, from_=config.main_full_jid,
             body=report)
 
-    def add_task(self, task, data, fn, *args, **kwargs):
+    def parse(self, task, data):
         self._id += 1
-        self._callbacks[self._id] = (fn, task, args, kwargs)
+        d = defer.Deferred()
+        self._callbacks[self._id] = d
         task = task.copy()
         task["_id"] = self._id
         task["_data"] = data
         encoded = self._proto.encode(cPickle.dumps(task, protocol=2))
         self.transport.write(encoded)
+        return d
+
+
+class PipeProtocol(object):
+    """Pipe protocol implementation.
+    Specification:
+        <packet length>|<packet><next packet length>|<packet>
+    Example:
+        6|packet10|new packet
+    """
+
+    def __init__(self):
+        self._data = ""
+        self._len = None
+
+    def decode(self, data):
+        packets = []
+        self._data += data
+        while True:
+            if self._len is None:
+                pos = self._data.find("|")
+                if pos == -1: break
+                self._len = int(self._data[:pos])
+                self._data = self._data[pos+1:]
+            if len(self._data) >= self._len:
+                packet = self._data[:self._len]
+                self._data = self._data[self._len:]
+                self._len = None
+                packets.append(packet)
+            else:
+                break
+        return packets
+
+    def encode(self, packet):
+        if type(packet) is unicode:
+            packet = packet.encode("utf-8")
+        return str(len(packet)) + "|" + packet

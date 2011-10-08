@@ -1,8 +1,8 @@
 import ConfigParser
 from twisted.internet import defer
 from twisted.internet.threads import deferToThread
-from utils import require_admin
 from plugins import Plugin
+import utils
 
 
 class ConfigPlugin(Plugin):
@@ -32,7 +32,7 @@ class ConfigPlugin(Plugin):
                     c.append(dict(config.items(section)))
             plugin.reload_config(c)
 
-    @require_admin
+    @utils.require_admin
     @defer.inlineCallbacks
     def reload_plugins_configs(self, user_jid, our_jid):
         config = yield deferToThread(self._blocking_get_config)

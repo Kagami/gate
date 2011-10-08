@@ -1,5 +1,8 @@
+from twisted.internet import defer
 from plugins.subscriptions import Subscriptions
+from fetcher import get_page
 from parsers import parsers
+import utils
 
 
 class Chans(Subscriptions):
@@ -43,15 +46,21 @@ class Chans(Subscriptions):
         """
         return self._chans_str
 
+    # TODO: Limit max connections count, shaping user's requests.
+    @defer.inlineCallbacks
     def show_board(self, user_jid, our_jid, host, board):
         """B [<chan> <board>]
-        Get board's thread list.
+        Show board's threads.
         """
         if host not in self._chans:
-            return u"Sorry, this chan not supported."
-
+            defer.returnValue(u"Sorry, this chan not supported.")
         parser = parsers[self._chans[host]]
         url = parser.get_board_url(host, board)
         if not url:
-            return u"Wrong board."
-        return unicode(str(url))
+            defer.returnValue(u"Wrong board.")
+        yield utils.wait_for_host(host)
+        try:
+            page = yield get_page(url)
+        except Exception:
+            defer.returnValue(u"Url fetching failed.")
+        defer.returnValue(u"nyak!" + unicode(len(page)))

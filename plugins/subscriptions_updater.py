@@ -1,12 +1,12 @@
 import traceback
 from twisted.python import log
-from twisted.internet import task, defer, reactor
+from twisted.internet import task, defer
 from db_objects import *
 from fetcher import NotFound, get_last_modified, get_page
 from plugins import Plugin
 from parsers import parsers
 from parsing_protocol import ParsingProtocol
-from utils import require_admin, trim, PipeProtocol, get_full_jid
+import utils
 import config
 
 
@@ -30,9 +30,9 @@ class SubscriptionsUpdater(Plugin):
             (r"[Uu]pd", self.updater_info),
         )
 
-    @require_admin
+    @utils.require_admin
     def updater_info(self, user_jid, our_jid):
-        return trim(u"""Updater plugin info:
+        return utils.trim(u"""Updater plugin info:
             current connections count: %d
             """ % self._conn_count)
 
@@ -41,33 +41,22 @@ class SubscriptionsUpdater(Plugin):
             log.msg(msg)
 
     @defer.inlineCallbacks
-    def run(self, subs=None):
-        if subs is None:
-            # Called by looping call
-            subs = yield Subscription.get_list()
-        while subs:
-            if self._conn_count >= self.MAX_CONNECTIONS_COUNT:
+    def run(self):
+        subs = yield Subscription.get_list()
+        for sub in subs:
+            while self._conn_count >= self.MAX_CONNECTIONS_COUNT:
                 self.debug("MAX CONNECTIONS: %d, WAIT" % self._conn_count)
-                reactor.callLater(1, self.run, subs)
-                return
-            sub = subs.pop(0)
+                yield utils.sleep(1)
             self._conn_count += 1
-            self.update(sub)
-
-    def update(self, sub):
-        parser = parsers[sub["parser"]]
-        if parser.is_supported("last_modified"):
-            self.process_last_modified(sub)
-        else:
-            self.process_page(sub, None)
+            parser = parsers[sub["parser"]]
+            if parser.is_supported("last_modified"):
+                self.process_last_modified(sub)
+            else:
+                self.process_page(sub, None)
 
     @defer.inlineCallbacks
     def process_last_modified(self, sub):
-        is_too_fast = yield Host(sub["host"]).is_too_fast()
-        if is_too_fast:
-            self.debug("HOST TOO FAST: %s (last modified)" % sub["url"])
-            reactor.callLater(1, self.process_last_modified, sub)
-            return
+        yield utils.wait_for_host(sub["host"])
         self.debug("HOST OK: %s (last modified)" % sub["url"])
         try:
             last_modified = yield get_last_modified(sub["url"])
@@ -91,11 +80,7 @@ class SubscriptionsUpdater(Plugin):
 
     @defer.inlineCallbacks
     def process_page(self, sub, last_modified):
-        is_too_fast = yield Host(sub["host"]).is_too_fast()
-        if is_too_fast:
-            self.debug("HOST TOO FAST: %s (page)" % sub["url"])
-            reactor.callLater(1, self.process_page, sub, last_modified)
-            return
+        yield utils.wait_for_host(sub["host"])
         self.debug("HOST OK: %s (page)" % sub["url"])
         try:
             page = yield get_page(sub["url"])
@@ -105,20 +90,18 @@ class SubscriptionsUpdater(Plugin):
             err = traceback.format_exc()[:-1]
             self.bad_url(sub, err)
         else:
-            self._sub_worker.add_task(
-                sub, page, self.process_parsed,
-                last_modified)
+            parsed = yield self._sub_worker.parse(sub, page)
+            self.process_parsed(sub, parsed, last_modified)
         # We've done, decrement connections count
         self._conn_count -= 1
 
     @defer.inlineCallbacks
     def dead_url(self, sub):
-        url = sub["url"]
-        self.debug("URL DEAD: %s" % url)
-        from_ = get_full_jid(sub["jid"])
-        users = yield UserSubscriptions.find(url)
-        yield UserSubscriptions.unsubscribe_all(url)
-        yield Subscription(url).remove()
+        self.debug("URL DEAD: %s" % sub["url"])
+        from_ = utils.get_full_jid(sub["jid"])
+        users = yield UserSubscriptions.find(sub["url"])
+        yield UserSubscriptions.unsubscribe_all(sub["url"])
+        yield Subscription(sub["url"]).remove()
         for user in users:
             self._xmpp.send_message(
                 to=user["jid"], from_=from_,
@@ -142,7 +125,7 @@ class SubscriptionsUpdater(Plugin):
     def process_parsed(self, sub, parsed, last_modified):
         if "updates" in parsed:
             # Send updates to users
-            from_ = get_full_jid(sub["jid"])
+            from_ = utils.get_full_jid(sub["jid"])
             users = yield UserSubscriptions.find(sub["url"])
             for user in users:
                 for text, xhtml in parsed["updates"]:

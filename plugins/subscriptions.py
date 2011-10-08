@@ -1,10 +1,9 @@
-import datetime
 from twisted.internet import defer
 from db_objects import *
 from fetcher import get_page
 from plugins import Plugin
 from parsers import parsers
-from utils import _NotHandled, get_full_jid
+from utils import _NotHandled, get_full_jid, wait_for_host
 import config
 
 
@@ -64,7 +63,7 @@ class Subscriptions(Plugin):
                 to=user_jid, from_=get_full_jid(sub["jid"]),
                 body=u"Subscribed.")
         else:
-            # TODO: is_too_fast check?
+            yield wait_for_host(sub["host"])
             try:
                 page = yield get_page(sub["url"])
             except Exception:

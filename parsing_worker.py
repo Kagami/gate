@@ -8,7 +8,7 @@ import select
 import cPickle
 import traceback
 from parsers import parsers
-from utils import PipeProtocol
+from parsing_protocol import PipeProtocol
 
 
 # Set stdin in nonblocking-mode
