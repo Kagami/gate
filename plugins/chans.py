@@ -52,4 +52,6 @@ class Chans(Subscriptions):
 
         parser = parsers[self._chans[host]]
         url = parser.get_board_url(host, board)
-        return unicode(url)
+        if not url:
+            return u"Wrong board."
+        return unicode(str(url))

@@ -9,14 +9,18 @@ class Wakaba(Parser):
     features = (
         "last_modified",
     )
+    BOARD_RE = r"[A-Za-z\d]{1,10}"
+    BOARD_REC = re.compile("\A%s\Z" % BOARD_RE)
 
     def get_thread_re(self, host):
         host = re.escape(host)
-        regex = r"\Ahttp://%s/[A-Za-z\d]{1,10}/res/\d{1,10}\.html\Z" % host
+        regex = r"\Ahttp://%s/%s/res/\d{1,10}\.html\Z" % (
+            host, self.BOARD_RE)
         return re.compile(regex)
 
     def get_board_url(self, host, board):
-        return "http://%s/%s/" % (host, board)
+        if self.BOARD_REC.match(board) is not None:
+            return "http://%s/%s/" % (host, board)
 
     def get_subscription_username(self, sub):
         if sub["type"] == "thread":
@@ -225,31 +229,3 @@ class Wakaba(Parser):
         xhtml_node.append(post["body_xhtml"])
         xhtml = etree.tostring(xhtml_node, encoding=unicode)
         return (text, xhtml)
-
-
-if __name__ == "__main__":
-    # Test parser.
-    # TODO: Use unittest/twisted.trial
-    wakaba = Wakaba()
-#    data = open("tests/24082.html").read()
-#    task = {
-#        "host": "nowere.net",
-#        "url": "http://nowere.net/b/arch/24082/",
-#        "type": "thread",
-#        "last": 28383,
-#        "_data": data,
-#    }
-    data = open("tests/11.html").read()
-    task = {
-        "host": "nowere.net",
-        "url": "http://nowere.net/wa/res/1.html",
-        "type": "thread",
-        "last": 0,
-        "_data": data,
-    }
-    res = wakaba.get_updates(task)
-    for text, xhtml in res["updates"]:
-        print text
-        print "---"
-        print xhtml
-        print "---"
