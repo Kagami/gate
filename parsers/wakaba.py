@@ -56,15 +56,6 @@ class Wakaba(Parser):
             last = self._get_post_id(posts[-1])
             return {"last": last}
 
-    def get_thread_node(self, node, is_first):
-        """Placed in separate method because it
-        overriden in subclass parsers.
-        """
-        if is_first:
-            return node.find("body/form")
-        else:
-            return node.find("body")
-
     def task_board(self, task):
         # We need to do decoding by ourself because lxml
         # will not see meta charset info in page chunks.
@@ -73,36 +64,37 @@ class Wakaba(Parser):
         threads = []
         is_first = True
         for node in nodes:
-            thread = self.get_thread_node(node, is_first)
+            thread = self._get_thread_node(node, is_first)
             is_first = False
             thread_id = self._get_post_id(thread)
             (text, xhtml) = self._parse_post(
                 thread, task, is_op_post=True, show_images=False,
                 render_xhtml=False, thread_id=thread_id)
-            posts = thread.findall(".//td[@class='reply']")
-            if posts:
-                omitted_node = thread.find("span[@class='omittedposts']")
-                if omitted_node is None:
-                    omitted_text = ""
-                    omitted_xhtml = ""
-                else:
-                    omitted = omitted_node.text
-                    omitted = omitted[:omitted.find(".")+1].strip()
-                    omitted_text = u"\n\n/%s/" % omitted
-                    omitted_xhtml = E.span(
-                        E.br(), E.br(),
-                        omitted, style="color: #707070;")
-                text += omitted_text
-                xhtml = E.span(xhtml, omitted_xhtml)
-                # Append 2 last posts
-                for post in posts[-2:]:
-                    (text2, xhtml2) = self._parse_post(
-                        post, task, show_images=False,
-                        render_xhtml=False, thread_id=thread_id)
-                    text += "\n\n" + text2
-                    xhtml.extend((E.br(), xhtml2))
-            threads.append((text, self._to_s(xhtml)))
+            omitted_node = thread.find("span[@class='omittedposts']")
+            if omitted_node is None:
+                omitted_text = ""
+                omitted_xhtml = ""
+            else:
+                omitted = omitted_node.text
+                omitted = omitted[:omitted.find(".")+1].strip()
+                omitted_text = u"\n\n/%s/" % omitted
+                omitted_xhtml = E.span(
+                    E.br(), E.br(),
+                    omitted, style="color: #707070;")
+            text += omitted_text
+            hr = u"\u2500"*50
+            xhtml = E.span(E.br(), hr, E.br(), xhtml, omitted_xhtml)
+            threads.insert(0, (text, self._to_s(xhtml)))
         return {"threads": threads}
+
+    def _get_thread_node(self, node, is_first):
+        """Placed in separate method because it
+        overriden in subclass parsers.
+        """
+        if is_first:
+            return node.find("body/form")
+        else:
+            return node.find("body")
 
     def _get_post_id(self, post_node):
         return int(post_node.find("a[@name]").get("name"))
@@ -284,13 +276,13 @@ class Wakaba(Parser):
                 E.br(),
                 "File: ", E.a(post["img_name"], href=post["img_src"]),
                 " - (", E.span(post["img_size"], style="font-style: italic;"),
-                ")",
-                E.br()]
+                ")"]
             if show_images:
-                img.append(
+                img.extend((
+                    E.br(),
                     E.a(E.img(
                         alt="img", src=post["img_thumb_src"]),
-                        href=post["img_src"]))
+                        href=post["img_src"])))
         else:
             img = ()
         xhtml = E.span(
