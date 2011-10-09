@@ -23,7 +23,7 @@ class Wakaba(Parser):
             return "http://%s/%s/" % (host, board)
 
     def get_subscription_username(self, sub):
-        if sub["type"] == "thread":
+        if sub["type"] == "thread_updates":
             spl = sub["url"].split("/")
             thread = spl[5][:spl[5].find(".")]
             return "%s_%s_%s" % (spl[2], spl[3], thread)
@@ -31,8 +31,11 @@ class Wakaba(Parser):
             return "main"
 
     def do_task(self, task):
-        if task["type"] != "thread":
-            return
+        task_handler = "task_" + task["type"]
+        if hasattr(self, task_handler):
+            return getattr(self, task_handler)(task)
+
+    def task_thread_updates(self, task):
         tree = etree.HTML(task["_data"])
         posts = tree.findall(".//td[@class='reply']")
         if not posts:
@@ -53,18 +56,76 @@ class Wakaba(Parser):
             last = self._get_post_id(posts[-1])
             return {"last": last}
 
-    def _get_post_id(self, post_node):
-        return int(post_node.find("a").get("name"))
+    def get_thread_node(self, node, is_first):
+        """Placed in separate method because it
+        overriden in subclass parsers.
+        """
+        if is_first:
+            return node.find("body/form")
+        else:
+            return node.find("body")
 
-    def _parse_post(self, post_node, task):
+    def task_board(self, task):
+        # We need to do decoding by ourself because lxml
+        # will not see meta charset info in page chunks.
+        data = task["_data"].decode("utf-8")
+        nodes = [etree.HTML(thr) for thr in data.split("<hr />")[2:-1]]
+        threads = []
+        is_first = True
+        for node in nodes:
+            thread = self.get_thread_node(node, is_first)
+            is_first = False
+            thread_id = self._get_post_id(thread)
+            (text, xhtml) = self._parse_post(
+                thread, task, is_op_post=True, show_images=False,
+                render_xhtml=False, thread_id=thread_id)
+            posts = thread.findall(".//td[@class='reply']")
+            if posts:
+                omitted_node = thread.find("span[@class='omittedposts']")
+                if omitted_node is None:
+                    omitted_text = ""
+                    omitted_xhtml = ""
+                else:
+                    omitted = omitted_node.text
+                    omitted = omitted[:omitted.find(".")+1].strip()
+                    omitted_text = u"\n\n/%s/" % omitted
+                    omitted_xhtml = E.span(
+                        E.br(), E.br(),
+                        omitted, style="color: #707070;")
+                text += omitted_text
+                xhtml = E.span(xhtml, omitted_xhtml)
+                # Append 2 last posts
+                for post in posts[-2:]:
+                    (text2, xhtml2) = self._parse_post(
+                        post, task, show_images=False,
+                        render_xhtml=False, thread_id=thread_id)
+                    text += "\n\n" + text2
+                    xhtml.extend((E.br(), xhtml2))
+            threads.append((text, self._to_s(xhtml)))
+        return {"threads": threads}
+
+    def _get_post_id(self, post_node):
+        return int(post_node.find("a[@name]").get("name"))
+
+    def _parse_post(self, post_node, task,
+                    is_op_post=False, show_images=True,
+                    render_xhtml=True, thread_id=None):
         post = {}
         label = post_node.find("label")
-        title = label.find("span[@class='replytitle']")
+        if is_op_post:
+            title_class = "filetitle"
+        else:
+            title_class = "replytitle"
+        title = label.find("span[@class='%s']" % title_class)
         if title is None:
             post["title"] = ""
         else:
             post["title"] = title.text
-        author_node = label.find("span[@class='commentpostername']")
+        if is_op_post:
+            author_node_class = "postername"
+        else:
+            author_node_class = "commentpostername"
+        author_node = label.find("span[@class='%s']" % author_node_class)
         author_email_node = author_node.find("a")
         if author_email_node is None:
             post["author_email"] = ""
@@ -88,7 +149,7 @@ class Wakaba(Parser):
                 post["trip_text"] = trip_email_node.text
                 post["trip_email"] = trip_email_node.get("href")
             post["date"] = trip_node.tail.strip()
-        post["id"] = post_node.find("a").get("name")
+        post["id"] = post_node.find("a[@name]").get("name")
         filesize_node = post_node.find("span[@class='filesize']")
         if filesize_node is None:
             post["img_src"] = ""
@@ -110,7 +171,10 @@ class Wakaba(Parser):
             if (node.tag == "blockquote" and
                 node.get("class") == "unkfunc"):
                 tag.set("style", "color: #789922;")
-            elif (node.tag == "pre"):
+            elif (node.tag == "div" and
+                  node.get("class") == "abbrev"):
+                tag.set("style", "color: #707070;")
+            elif node.tag == "pre":
                 tag.set("style", "font-family: monospace;")
                 node = node[0]
             # Should be E.p() without additional brs but
@@ -120,6 +184,7 @@ class Wakaba(Parser):
                 s += node.text
                 tag[-1].tail = node.text
             # TODO: <strong><em>bold and italic</em></strong>
+            # TODO: ul, ol
             for child in node:
                 if child.tag == "a":
                     s += child.text
@@ -158,11 +223,17 @@ class Wakaba(Parser):
             body.append(s)
             post["body_xhtml"].append(tag)
         post["body"] = u"\n\n".join(body)
-        return self._format_post(post, task)
+        return self._format_post(
+            post, task, show_images, render_xhtml, thread_id)
 
-    def _format_post(self, post, task):
+    def _format_post(self, post, task, show_images, render_xhtml, thread_id):
         """Format post to text and xhtml representations."""
         # Text formatting
+        if thread_id is None:
+            url = task["url"]
+        else:
+            url = "%sres/%d.html" % (task["url"], thread_id)
+        post_url = "%s#%s" %(url, post["id"])
         if post["title"]:
             title = post["title"] + " "
         else:
@@ -171,7 +242,6 @@ class Wakaba(Parser):
             email = " <%s>" % post["author_email"]
         else:
             email = ""
-        post_url = task["url"] + "#" + post["id"]
         if post["img_src"]:
             img = "\nFile: %s -(%s) <%s>" % (
                 post["img_name"], post["img_size"], post["img_src"])
@@ -210,22 +280,28 @@ class Wakaba(Parser):
         else:
             trip = ""
         if post["img_src"]:
-            img = (
+            img = [
                 E.br(),
                 "File: ", E.a(post["img_name"], href=post["img_src"]),
                 " - (", E.span(post["img_size"], style="font-style: italic;"),
                 ")",
-                E.br(),
-                E.a(E.img(
-                    alt="img", src=post["img_thumb_src"]),
-                    href=post["img_src"]))
+                E.br()]
+            if show_images:
+                img.append(
+                    E.a(E.img(
+                        alt="img", src=post["img_thumb_src"]),
+                        href=post["img_src"]))
         else:
             img = ()
-        xhtml_node = E.span(
+        xhtml = E.span(
             E.br(), title, author, trip,
             " ", post["date"], " ",
             E.a("No.", post["id"], href=post_url),
             *img)
-        xhtml_node.append(post["body_xhtml"])
-        xhtml = etree.tostring(xhtml_node, encoding=unicode)
+        xhtml.append(post["body_xhtml"])
+        if render_xhtml:
+            xhtml = self._to_s(xhtml)
         return (text, xhtml)
+
+    def _to_s(self, node):
+        return etree.tostring(node, encoding=unicode)

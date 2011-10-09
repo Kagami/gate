@@ -72,17 +72,14 @@ class Subscriptions(Plugin):
                     body=u"Url check failed, subscription aborted. "
                           "Seems like not existing url.")
             else:
-                self._worker.add_task(
-                    sub, page, self.process_parsed, user_jid, our_jid)
-
-    def process_parsed(self, sub, parsed, user_jid, our_jid):
-        if "last" in parsed and parsed["last"] is not None:
-            self.process_last(user_jid, our_jid, sub, parsed["last"])
-        else:
-            self._xmpp.send_message(
-                to=user_jid, from_=get_full_jid(our_jid),
-                body=u"Page parsing failed, subscription aborted. "
-                      "Seems like not existing url.")
+                parsed = yield self._worker.parse(sub, page)
+                if "last" in parsed and parsed["last"] is not None:
+                    self.process_last(user_jid, our_jid, sub, parsed["last"])
+                else:
+                    self._xmpp.send_message(
+                        to=user_jid, from_=get_full_jid(our_jid),
+                        body=u"Page parsing failed, subscription aborted. "
+                              "Seems like not existing url.")
 
     @defer.inlineCallbacks
     def unsubscribe(self, user_jid, our_jid, url):

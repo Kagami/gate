@@ -19,7 +19,6 @@ def _make_factory(url, *args, **kwargs):
     if "timeout" in kwargs:
         connect_kwargs["timeout"] = kwargs["timeout"]
     if scheme == "https":
-        # TODO: Why import ssl every time?
         from twisted.internet import ssl
         contextFactory = ssl.ClientContextFactory()
         reactor.connectSSL(

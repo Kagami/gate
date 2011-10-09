@@ -3,6 +3,7 @@ from plugins.subscriptions import Subscriptions
 from fetcher import get_page
 from parsers import parsers
 import utils
+import config
 
 
 class Chans(Subscriptions):
@@ -17,7 +18,7 @@ class Chans(Subscriptions):
     def get_handlers(self):
         return super(Chans, self).get_handlers() + (
             (r"[Cc]hans", self.chans),
-            (r"[Bb](?: +(\S+) +(\S+))?", self.show_board),
+            (r"[Bb] +(\S+) +(\S+)", self.show_board),
         )
 
     def reload_config(self, config):
@@ -31,7 +32,7 @@ class Chans(Subscriptions):
             self._urls_re[r] = {
                 "host": item["host"],
                 "parser": item["parser"],
-                "type": "thread",
+                "type": "thread_updates",
             }
         self._chans_str = u"Chans:\n" + u"\n".join(self._chans.keys())
 
@@ -46,15 +47,16 @@ class Chans(Subscriptions):
         """
         return self._chans_str
 
-    # TODO: Limit max connections count, shaping user's requests.
+    # TODO: Limit max connections count, shape user's requests.
     @defer.inlineCallbacks
     def show_board(self, user_jid, our_jid, host, board):
-        """B [<chan> <board>]
+        """B <chan> <board>
         Show board's threads.
         """
         if host not in self._chans:
             defer.returnValue(u"Sorry, this chan not supported.")
-        parser = parsers[self._chans[host]]
+        parser_name = self._chans[host]
+        parser = parsers[parser_name]
         url = parser.get_board_url(host, board)
         if not url:
             defer.returnValue(u"Wrong board.")
@@ -62,5 +64,17 @@ class Chans(Subscriptions):
         try:
             page = yield get_page(url)
         except Exception:
-            defer.returnValue(u"Url fetching failed.")
-        defer.returnValue(u"nyak!" + unicode(len(page)))
+            defer.returnValue(u"Url fetching failed. "
+                               "Seems like not existing board.")
+        task = {
+            "parser": parser_name,
+            "type": "board",
+            "host": host,
+            "url": url,
+        }
+        parsed = yield self._worker.parse(task, page)
+        if "threads" in parsed and parsed["threads"]:
+            defer.returnValue(parsed["threads"])
+        else:
+            defer.returnValue(u"Page parsing failed. "
+                               "Seems like not existing board.")

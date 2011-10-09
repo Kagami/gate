@@ -1,4 +1,5 @@
 *.pyc
 .*.swp
 config.py
+_tmp/
 _trial_temp/

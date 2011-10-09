@@ -165,14 +165,6 @@ class Subscription(db.MongoObject):
             {"url": self._url},
             {"$set": {"last": last}})
 
-    @classmethod
-    @defer.inlineCallbacks
-    def is_jid_exists(cls, jid):
-        res = yield cls._db.find_one(
-            {"jid": jid},
-            fields=[])
-        defer.returnValue(bool(res))
-
     @defer.inlineCallbacks
     def get_jid(self):
         res = yield self._db.find_one(

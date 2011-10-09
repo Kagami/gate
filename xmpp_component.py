@@ -25,14 +25,6 @@ class XMPPComponent(component.Service):
         xmlstream.addObserver("/presence", self._on_presence)
         xmlstream.addObserver("/message[@type='chat']", self._on_message)
 
-    def is_jid_alive(self, jid):
-        """Check if jid is alive i.e. corresponding url still
-        exists or it's main jid which always alive.
-        """
-        if jid == config.main_jid:
-            return True
-        return Subscription.is_jid_exists(jid)
-
     @defer.inlineCallbacks
     def _on_presence(self, prs):
         # TODO: Save subscriptions to the database and
@@ -44,11 +36,8 @@ class XMPPComponent(component.Service):
         our_jid = get_bare_jid(prs["to"])
         our_full_jid = get_full_jid(our_jid)
         type_ = prs.getAttribute("type")
-        is_alive = yield self.is_jid_alive(our_jid)
         send_status = False
-
-        if type_ == "subscribe" and is_alive:
-            # Approve subscribe if jid is alive
+        if type_ == "subscribe":
             self.send_presence(
                 to=user_jid, from_=our_jid,
                 type_="subscribed")
@@ -67,44 +56,35 @@ class XMPPComponent(component.Service):
         if type_ == "probe" or send_status:
             self.send_presence(to=prs["from"], from_=our_full_jid)
 
-    @defer.inlineCallbacks
     def _on_message(self, msg):
         user_jid = get_bare_jid(msg["from"])
         if config.only_admin and user_jid != config.admin_jid:
             return
         our_jid = get_bare_jid(msg["to"])
         our_full_jid = get_full_jid(our_jid)
-        is_alive = yield self.is_jid_alive(our_jid)
-
         if (msg.body and len(msg.body.children) > 0 and
             type(msg.body.children[0]) is unicode):
             text = msg.body.children[0]
         else:
             return
-
         reply_msg = self.message(to=msg["from"], from_=our_full_jid)
-        if is_alive:
-            d = command_handler(user_jid, our_jid, text)
-            d.addCallbacks(self._send_reply, self._send_error_report,
-                           callbackArgs=[reply_msg],
-                           errbackArgs=[reply_msg, msg])
-        else:
-            reply_msg.body.addContent(u"This jid is dead or doesn't exist. "
-                                       "Please send commands to existing "
-                                       "jids or to the main jid.")
-            self.send(reply_msg)
+        d = command_handler(user_jid, our_jid, text)
+        d.addCallbacks(self._send_reply, self._send_error_report,
+                       callbackArgs=[reply_msg],
+                       errbackArgs=[reply_msg, msg])
 
     def _send_reply(self, reply, reply_msg):
-        if reply and type(reply) is unicode:
+        if not reply: return
+        if type(reply) is unicode:
             reply_msg.body.addContent(reply)
             self.send(reply_msg)
+        elif type(reply) is list:
+            for text, xhtml in reply:
+                self.send_message(
+                    to=reply_msg["to"], from_=reply_msg["from"],
+                    body=text, body_xhtml=xhtml)
 
     def _send_error_report(self, failure, reply_msg, msg):
-        """This should be called only on system-level
-        errors such as database or code error. Normal errors
-        like wrong user command should be processed by command
-        handler.
-        """
         reply_msg.body.addContent(u"Sorry, error while handling the request "
                                    "was occured. We will try to fix it as "
                                    "soon as possible.")

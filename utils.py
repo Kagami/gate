@@ -27,6 +27,12 @@ def trim(docstring):
     return u"\n".join([line.strip() for line in docstring.splitlines()])
 
 
+def get_username(jid):
+    pos = jid.find("@")
+    if pos != -1:
+        return jid[:pos]
+
+
 def get_bare_jid(jid):
     pos = jid.find("/")
     if pos != -1:

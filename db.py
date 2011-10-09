@@ -25,6 +25,8 @@ class DBConnection(object):
                 self._conn = conn
         defer.returnValue(self._conn)
 
+    # TODO: Auth? Currently there is no authorization
+    # support in the txmongo package.
     @defer.inlineCallbacks
     def get_db(self, collection=""):
         if self._db is None:

@@ -26,5 +26,5 @@ class TestWakaba(TestCase):
     def test_get_subscription_username(self):
         get_username = self.wakaba.get_subscription_username
         self.assertEqual(get_username({"type": "nyak"}), "main")
-        sub = {"type": "thread", "url": "http://nyak.ru/b/res/1.html"}
+        sub = {"type": "thread_updates", "url": "http://nyak.ru/b/res/1.html"}
         self.assertEqual(get_username(sub), "nyak.ru_b_1")

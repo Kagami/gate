@@ -123,6 +123,7 @@ class SubscriptionsUpdater(Plugin):
 
     @defer.inlineCallbacks
     def process_parsed(self, sub, parsed, last_modified):
+        if "_error" in parsed: return
         if "updates" in parsed:
             # Send updates to users
             from_ = utils.get_full_jid(sub["jid"])
