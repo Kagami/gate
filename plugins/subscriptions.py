@@ -10,6 +10,8 @@ import config
 class Subscriptions(Plugin):
     """Implements subscirbe/unsubscribe mechanism."""
 
+    MAX_SUBSCRIPTIONS_COUNT = 50
+
     def get_handlers(self):
         return super(Subscriptions, self).get_handlers() + (
             (r"[Ss] +(\S+)", self.subscribe),
@@ -29,19 +31,19 @@ class Subscriptions(Plugin):
         """S <url>
         Subscribe to url.
         """
-        is_subscribed = yield UserSubscriptions(
-            user_jid).is_subscribed(url)
+        user_subs = UserSubscriptions(user_jid)
+        subs_count = yield user_subs.count()
+        if subs_count >= self.MAX_SUBSCRIPTIONS_COUNT:
+            defer.returnValue(
+                u"Sorry, %d subscriptions max." % (
+                    self.MAX_SUBSCRIPTIONS_COUNT))
+        is_subscribed = yield user_subs.is_subscribed(url)
         if is_subscribed:
             defer.returnValue(u"You've already subscribed to this url.")
         else:
             sub = self.url_match(url)
             if type(sub) is not dict:
                 raise _NotHandled
-            is_too_fast = yield UserSettings(
-                user_jid).is_too_fast_subscribe()
-            if is_too_fast:
-                defer.returnValue(u"Too many subscribe requests. "
-                                   "Please, slow down.")
             sub = sub.copy()
             sub["url"] = url
             parser = parsers[sub["parser"]]

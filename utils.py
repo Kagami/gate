@@ -1,3 +1,4 @@
+import datetime
 from twisted.internet import defer, reactor
 from db_objects import *
 import config
@@ -27,10 +28,10 @@ def trim(docstring):
     return u"\n".join([line.strip() for line in docstring.splitlines()])
 
 
-def get_username(jid):
+def get_domain(jid):
+    jid = get_bare_jid(jid)
     pos = jid.find("@")
-    if pos != -1:
-        return jid[:pos]
+    return jid[pos+1:]
 
 
 def get_bare_jid(jid):
@@ -52,10 +53,18 @@ def sleep(seconds):
 
 
 @defer.inlineCallbacks
-def wait_for_host(host):
+def wait_for_host(host, level=1):
+    """Wait if we used host less than second ago."""
+    if not host in _hosts:
+        _hosts[host] = {}
     while True:
-        is_too_fast = yield Host(host).is_too_fast()
-        if is_too_fast:
-            yield sleep(1)
-        else:
+        now = datetime.datetime.utcnow()
+        second_ago = now - datetime.timedelta(seconds=1)
+        if (not level in _hosts[host] or
+            _hosts[host][level] <= second_ago):
+            _hosts[host][level] = now
             break
+        else:
+            yield sleep(1)
+
+_hosts = {}

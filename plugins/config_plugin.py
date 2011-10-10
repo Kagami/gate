@@ -8,16 +8,16 @@ import utils
 class ConfigPlugin(Plugin):
     """Implements getting and setting plugins configs."""
 
+    def get_handlers(self):
+        return super(ConfigPlugin, self).get_handlers() + (
+            (r"[Rr]eload", self.reload_plugins_configs),
+        )
+
     def start(self):
         # Blockingly get config and set it. It's ok since
         # reactor has not started yet.
         config = self._blocking_get_config()
         self._reload_plugins_configs(config)
-
-    def get_handlers(self):
-        return super(ConfigPlugin, self).get_handlers() + (
-            (r"[Rr]eload", self.reload_plugins_configs),
-        )
 
     def _blocking_get_config(self):
         config = ConfigParser.RawConfigParser()

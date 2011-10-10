@@ -3,9 +3,6 @@ import txmongo
 import config
 
 
-MAX_DB_INT = 2147483647
-
-
 class DBConnection(object):
     """Wrapper around MongoConnection."""
 
@@ -73,12 +70,11 @@ class MongoObject(object):
     """Base abstract class for mongo objects."""
 
     __metaclass__ = _MongoObjectMeta
+    indexes = ()
 
     @staticmethod
     def _all_db(collection_name):
         return _DBWrapper(collection_name)
-
-    indexes = ()
 
     @classmethod
     @defer.inlineCallbacks

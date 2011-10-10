@@ -8,7 +8,7 @@ import config
 
 @defer.inlineCallbacks
 def command_handler(user_jid, our_jid, text):
-    """Handle user's command. Return deferred."""
+    """Handle user's command."""
     text_length = len(text)
     if text_length > config.max_command_length:
         defer.returnValue(

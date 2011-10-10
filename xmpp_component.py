@@ -3,12 +3,16 @@ from twisted.internet import defer
 from twisted.words.xish import domish
 from twisted.words.protocols.jabber import component
 from db_objects import *
-from utils import get_bare_jid, get_full_jid
+from utils import get_domain, get_bare_jid, get_full_jid
 import config
 from plugins import command_handler
 
 
 class XMPPComponent(component.Service):
+
+    def __init__(self):
+        self._requests = {}
+        self._whitelist = []
 
     def _log_data_in(self, buf):
         log.msg("RECV: %r" % buf)
@@ -25,6 +29,12 @@ class XMPPComponent(component.Service):
         xmlstream.addObserver("/presence", self._on_presence)
         xmlstream.addObserver("/message[@type='chat']", self._on_message)
 
+    def is_filtered_jid(self, user_jid):
+        if (self._whitelist and
+            user_jid not in self._whitelist and
+            get_domain(user_jid) not in self._whitelist):
+            return True
+
     @defer.inlineCallbacks
     def _on_presence(self, prs):
         # TODO: Save subscriptions to the database and
@@ -32,6 +42,8 @@ class XMPPComponent(component.Service):
         # online/offline (service restart).
         user_jid = get_bare_jid(prs["from"])
         if config.only_admin and user_jid != config.admin_jid:
+            return
+        if self.is_filtered_jid(user_jid):
             return
         our_jid = get_bare_jid(prs["to"])
         our_full_jid = get_full_jid(our_jid)
@@ -68,10 +80,24 @@ class XMPPComponent(component.Service):
         else:
             return
         reply_msg = self.message(to=msg["from"], from_=our_full_jid)
-        d = command_handler(user_jid, our_jid, text)
-        d.addCallbacks(self._send_reply, self._send_error_report,
-                       callbackArgs=[reply_msg],
-                       errbackArgs=[reply_msg, msg])
+        if self.is_filtered_jid(user_jid):
+            self._send_reply(
+                (u"Sorry, your server not in whitelist. "
+                  "Please use more popular jabber server or "
+                  "contact administrator.\nWe can't allow "
+                  "all servers because of spam. "
+                  "Hope for your understanding."),
+                reply_msg)
+        elif not self._start_request(user_jid):
+            self._send_reply(
+                u"Too many requests. Please, slow down.",
+                reply_msg)
+        else:
+            d = command_handler(user_jid, our_jid, text)
+            d.addCallbacks(self._send_reply, self._send_error_report,
+                           callbackArgs=[reply_msg],
+                           errbackArgs=[reply_msg, msg])
+            d.addBoth(self._end_request, user_jid)
 
     def _send_reply(self, reply, reply_msg):
         if not reply: return
@@ -89,7 +115,6 @@ class XMPPComponent(component.Service):
                                    "was occured. We will try to fix it as "
                                    "soon as possible.")
         self.send(reply_msg)
-
         report = (u"HANDLING XMPP REQUEST ERROR:\n\n"
                    "INPUT STANZA:\n%s\n\n"
                    "FAILURE:\n%s" % (msg.toXml(), failure))
@@ -97,6 +122,15 @@ class XMPPComponent(component.Service):
         self.send_message(
             to=config.error_report_jid, from_=config.main_full_jid,
             body=report)
+
+    def _start_request(self, user_jid):
+        if user_jid not in self._requests:
+            self._requests[user_jid] = 1
+            return True
+
+    def _end_request(self, result, user_jid):
+        if user_jid in self._requests:
+            del self._requests[user_jid]
 
     def message(self, to="", from_="", type_="chat", body="",
                 body_xhtml=""):

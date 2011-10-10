@@ -5,7 +5,6 @@ from db_objects import *
 from fetcher import NotFound, get_last_modified, get_page
 from plugins import Plugin
 from parsers import parsers
-from parsing_protocol import ParsingProtocol
 import utils
 import config
 
@@ -16,14 +15,9 @@ class SubscriptionsUpdater(Plugin):
     UPDATE_TIMEOUT = 60 * 2
 
     def start(self):
-        self._sub_worker = ParsingProtocol(self._xmpp)
-        self._sub_worker.start()
         self._conn_count = 0
         self._loop = task.LoopingCall(self.run)
         self._loop.start(self.UPDATE_TIMEOUT)
-
-    def stop(self):
-        self._sub_worker.stop()
 
     def get_handlers(self):
         return super(SubscriptionsUpdater, self).get_handlers() + (
@@ -90,7 +84,7 @@ class SubscriptionsUpdater(Plugin):
             err = traceback.format_exc()[:-1]
             self.bad_url(sub, err)
         else:
-            parsed = yield self._sub_worker.parse(sub, page)
+            parsed = yield self._worker.parse(sub, page)
             self.process_parsed(sub, parsed, last_modified)
         # We've done, decrement connections count
         self._conn_count -= 1

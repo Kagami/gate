@@ -47,7 +47,6 @@ class Chans(Subscriptions):
         """
         return self._chans_str
 
-    # TODO: Limit max connections count, shape user's requests.
     @defer.inlineCallbacks
     def show_board(self, user_jid, our_jid, host, board):
         """B <chan> <board>
@@ -60,7 +59,7 @@ class Chans(Subscriptions):
         url = parser.get_board_url(host, board)
         if not url:
             defer.returnValue(u"Wrong board.")
-        yield utils.wait_for_host(host)
+        yield utils.wait_for_host(host, 2)
         try:
             page = yield get_page(url)
         except Exception:

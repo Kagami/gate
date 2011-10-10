@@ -1,4 +1,3 @@
-import datetime
 from twisted.internet import defer
 import txmongo
 from txmongo.filter import ASCENDING, DESCENDING
@@ -17,32 +16,8 @@ class UserSettings(db.MongoObject):
 
     @defer.inlineCallbacks
     def is_exists(self):
-        """If user doesn't exist, set initial settings."""
-        time = datetime.datetime.utcfromtimestamp(0)
         try:
-            yield self._db.insert(
-                {"jid": self._jid, "last_subscribe": time},
-                safe=True)
-        except txmongo._pymongo.errors.OperationFailure:
-            defer.returnValue(True)
-        else:
-            defer.returnValue(False)
-
-    @defer.inlineCallbacks
-    def is_too_fast_subscribe(self):
-        """Return False and update user's last
-        subscribe time to now if last subscribe
-        was more than second ago.
-        Else return True that means it's too fast to
-        subscribe now.
-        """
-        now = datetime.datetime.utcnow()
-        second_ago = now - datetime.timedelta(seconds=1)
-        try:
-            yield self._db.update(
-                {"jid": self._jid, "last_subscribe": {"$lte": second_ago}},
-                {"$set": {"last_subscribe": now}},
-                upsert=True, safe=True)
+            yield self._db.insert({"jid": self._jid}, safe=True)
         except txmongo._pymongo.errors.OperationFailure:
             defer.returnValue(True)
         else:
@@ -88,7 +63,12 @@ class UserSubscriptions(db.MongoObject):
         """Return user's subscriptions."""
         return self._db.find(
             {"jid": self._jid},
-            fields=["url", "description"])
+            fields=["url"])
+
+    def count(self):
+        """Return user's subscriptions count."""
+        return self._db.count(
+            {"jid": self._jid})
 
     @classmethod
     def find(cls, url):
@@ -195,32 +175,14 @@ class Host(db.MongoObject):
         self._host = host
 
     @defer.inlineCallbacks
-    def is_too_fast(self):
-        """Return False and update host's last use time
-        to now if last use was more than second ago.
-        Else return True that means it's too fast to
-        use host now.
-        """
-        now = datetime.datetime.utcnow()
-        second_ago = now - datetime.timedelta(seconds=1)
-        try:
-            yield self._db.update(
-                {"host": self._host, "last_use": {"$lte": second_ago}},
-                {"$set": {"last_use": now}},
-                upsert=True, safe=True)
-        except txmongo._pymongo.errors.OperationFailure:
-            defer.returnValue(True)
-        else:
-            defer.returnValue(False)
-
-    @defer.inlineCallbacks
     def inc_errors(self):
         """Increment host errors and return
         errors count.
         """
         yield self._db.update(
             {"host": self._host},
-            {"$inc": {"errors": 1}})
+            {"$inc": {"errors": 1}},
+            upsert=True)
         res = yield self._db.find_one(
             {"host": self._host},
             fields=["errors"])

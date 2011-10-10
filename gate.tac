@@ -27,7 +27,8 @@ options._dispatch["reactor"] = lambda a, b: None
 options.parseOptions()
 logfilename = options.get("logfile")
 if logfilename and logfilename != "-":
-    logfile = LogFile.fromFullPath(logfilename, rotateLength=20000000)
+    logfile = LogFile.fromFullPath(
+        logfilename, rotateLength=20000000, maxRotatedFiles=5)
     application.setComponent(ILogObserver, FileLogObserver(logfile).emit)
 
 xmpp_manager = component.buildServiceManager(

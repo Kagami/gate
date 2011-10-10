@@ -85,6 +85,10 @@ class Wakaba(Parser):
             hr = u"\u2500"*50
             xhtml = E.span(E.br(), hr, E.br(), xhtml, omitted_xhtml)
             threads.insert(0, (text, self._to_s(xhtml)))
+        # Add separator
+        if threads:
+            hr = u"\u2591"*60
+            threads.insert(0, (hr, self._to_s(E.span(E.br(), hr))))
         return {"threads": threads}
 
     def _get_thread_node(self, node, is_first):
@@ -225,7 +229,10 @@ class Wakaba(Parser):
             url = task["url"]
         else:
             url = "%sres/%d.html" % (task["url"], thread_id)
-        post_url = "%s#%s" %(url, post["id"])
+        if str(thread_id) != post["id"]:
+            post_url = "%s#%s" %(url, post["id"])
+        else:
+            post_url = url
         if post["title"]:
             title = post["title"] + " "
         else:

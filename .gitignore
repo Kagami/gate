@@ -1,5 +1,6 @@
 *.pyc
 .*.swp
 config.py
+plugins.cfg
 _tmp/
 _trial_temp/
