@@ -21,7 +21,7 @@ class ConfigPlugin(Plugin):
 
     def _blocking_get_config(self):
         config = ConfigParser.RawConfigParser()
-        config.read("plugins.cfg")
+        config.read("gate.cfg")
         return config
 
     def _reload_plugins_configs(self, config):

@@ -1,6 +1,5 @@
 *.pyc
 .*.swp
-config.py
-plugins.cfg
+gate.cfg
 _tmp/
 _trial_temp/
