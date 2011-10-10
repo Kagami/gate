@@ -14,15 +14,15 @@ class SubscriptionsUpdater(Plugin):
     MAX_CONNECTIONS_COUNT = 50
     UPDATE_TIMEOUT = 60 * 2
 
-    def start(self):
-        self._conn_count = 0
-        self._loop = task.LoopingCall(self.run)
-        self._loop.start(self.UPDATE_TIMEOUT)
-
     def get_handlers(self):
         return super(SubscriptionsUpdater, self).get_handlers() + (
             (r"[Uu]pd", self.updater_info),
         )
+
+    def start(self):
+        self._conn_count = 0
+        self._loop = task.LoopingCall(self.run)
+        self._loop.start(self.UPDATE_TIMEOUT)
 
     @utils.require_admin
     def updater_info(self, user_jid, our_jid):
@@ -36,6 +36,7 @@ class SubscriptionsUpdater(Plugin):
 
     @defer.inlineCallbacks
     def run(self):
+        if self._conn_count: return
         subs = yield Subscription.get_list()
         for sub in subs:
             while self._conn_count >= self.MAX_CONNECTIONS_COUNT:
