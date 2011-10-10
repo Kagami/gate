@@ -73,26 +73,25 @@ class Wakaba(Parser):
             (text, xhtml) = self._parse_post(
                 thread, task, is_op_post=True, show_images=False,
                 render_xhtml=False, thread_id=thread_id)
+            xhtml = E.span(E.br(), self._HR, E.br(), xhtml)
             posts = thread.findall(".//td[@class='reply']")
             if posts:
                 omitted_node = thread.find("span[@class='omittedposts']")
                 if omitted_node is None:
                     omitted_text = ""
-                    omitted_xhtml = ""
+                    omitted_xhtml = E.br()
                 else:
                     omitted = omitted_node.text
                     omitted = omitted[:omitted.find(".")+1].strip()
                     omitted_text = u"\n\n/%s/" % omitted
                     omitted_xhtml = E.span(
-                        E.br(), E.br(),
-                        omitted, style="color: #707070;")
+                        E.br(), E.br(), omitted, E.br(),
+                        style="color: #707070;")
                 (text2, xhtml2) = self._parse_post(
                     posts[-1], task, show_images=False,
                     render_xhtml=False, thread_id=thread_id)
                 text += omitted_text + "\n\n" + text2
-                xhtml = E.span(
-                    E.br(), self._HR, E.br(),
-                    xhtml, omitted_xhtml, E.br(), xhtml2)
+                xhtml.extend((omitted_xhtml, xhtml2))
             threads.insert(0, (text, self._to_s(xhtml)))
         # Add separator
         if threads:
