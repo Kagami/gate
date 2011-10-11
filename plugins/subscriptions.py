@@ -65,7 +65,7 @@ class Subscriptions(Plugin):
                 to=user_jid, from_=get_full_jid(sub["jid"]),
                 body=u"Subscribed.")
         else:
-            yield wait_for_host(sub["host"])
+            yield wait_for_host(sub["host"], 2)
             try:
                 page = yield get_page(sub["url"])
             except Exception:
