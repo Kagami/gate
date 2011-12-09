@@ -54,17 +54,17 @@ def sleep(seconds):
 
 @defer.inlineCallbacks
 def wait_for_host(host, level=1):
-    """Wait if we used host less than second ago."""
+    """Wait if we used host less than several seconds ago."""
     if not host in _hosts:
         _hosts[host] = {}
     while True:
         now = datetime.datetime.utcnow()
-        second_ago = now - datetime.timedelta(seconds=1)
+        seconds_ago = now - datetime.timedelta(seconds=3)
         if (not level in _hosts[host] or
-            _hosts[host][level] <= second_ago):
+            _hosts[host][level] <= seconds_ago):
             _hosts[host][level] = now
             break
         else:
-            yield sleep(1)
+            yield sleep(3)
 
 _hosts = {}

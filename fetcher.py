@@ -3,8 +3,8 @@ from twisted.web import client
 from twisted.web.error import Error as WebError
 
 
-USER_AGENT = ("Mozilla/5.0 (Windows NT 5.1; rv:5.0.1) "
-              "Gecko/20100101 Firefox/5.0.1")
+USER_AGENT = ("Mozilla/5.0 (Windows NT 5.1; rv:8.0) "
+              "Gecko/20100101 Firefox/8.0")
 TIMEOUT = 5
 
 

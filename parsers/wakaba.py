@@ -158,13 +158,18 @@ class Wakaba(Parser):
         if filesize_node is None:
             post["img_src"] = ""
         else:
-            host = "http://" + task["host"]
-            img_a = filesize_node.find("a")
-            post["img_src"] = host + img_a.get("href")
-            post["img_name"] = img_a.text
-            post["img_size"] = filesize_node.find("em").text
-            img_thumb = post_node.find(".//img[@class='thumb']")
-            post["img_thumb_src"] = host + img_thumb.get("src")
+            em_node = filesize_node.find("em")
+            # TODO: parse it right.
+            if em_node is None:
+                post["img_src"] = ""
+            else:
+                host = "http://" + task["host"]
+                img_a = filesize_node.find("a")
+                post["img_src"] = host + img_a.get("href")
+                post["img_name"] = img_a.text
+                post["img_size"] = em_node.text
+                img_thumb = post_node.find(".//img[@class='thumb']")
+                post["img_thumb_src"] = host + img_thumb.get("src")
         # Body
         post_body_node = post_node.find("blockquote")
         body = []
@@ -204,6 +209,9 @@ class Wakaba(Parser):
                     tag.append(
                         E.span(child.text, style="font-weight: bold;"))
                 elif child.tag == "em":
+                    # TODO: baaaad hack, fix it!
+                    if child.text is None:
+                        child.text = ""
                     s += "/%s/" % child.text
                     tag.append(
                         E.span(child.text, style="font-style: italic;"))

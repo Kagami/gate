@@ -10,7 +10,7 @@ import config
 class Subscriptions(Plugin):
     """Implements subscirbe/unsubscribe mechanism."""
 
-    MAX_SUBSCRIPTIONS_COUNT = 50
+    MAX_SUBSCRIPTIONS_COUNT = 20
 
     def get_handlers(self):
         return super(Subscriptions, self).get_handlers() + (
@@ -61,11 +61,8 @@ class Subscriptions(Plugin):
             self._xmpp.send_presence(
                 to=user_jid, from_=sub["jid"],
                 type_="subscribe")
-            self._xmpp.send_message(
-                to=user_jid, from_=get_full_jid(sub["jid"]),
-                body=u"Subscribed.")
         else:
-            yield wait_for_host(sub["host"], 2)
+            yield wait_for_host(sub["host"], level=2)
             try:
                 page = yield get_page(sub["url"])
             except Exception:
@@ -99,9 +96,6 @@ class Subscriptions(Plugin):
         if url and is_subscribed:
             yield user_subs.unsubscribe(url)
             yield Subscription(url).remove_empty()
-            self._xmpp.send_message(
-                to=user_jid, from_=get_full_jid(our_jid),
-                body="Unsubscribed.")
             self._xmpp.send_presence(
                 to=user_jid, from_=sub_jid,
                 type_="unsubscribe")
